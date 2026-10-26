@@ -117,7 +117,18 @@ class Game:
             self.screen = pygame.Surface((MAP_W, MAP_H))
             self._draw_map_tiles()
             self._map_cache, self.screen = self.screen, real
-        self.screen.blit(self._map_cache, (0, 0))
+            self._bg_key = "none"
+        info = self.sim.last_search
+        key = (id(info) if info else None, self.show_search)
+        if key != self._bg_key:
+            self._bg = self._map_cache.copy()
+            if self.show_search and info and info["path"]:
+                overlay = pygame.Surface((MAP_W, MAP_H), pygame.SRCALPHA)
+                for (r, c) in info["explored"]:
+                    overlay.fill(C["explored"], self.tile_rect(r, c).inflate(-4, -4))
+                self._bg.blit(overlay, (0, 0))
+            self._bg_key = key
+        self.screen.blit(self._bg, (0, 0))
 
     def _draw_map_tiles(self):
         city = self.sim.city
@@ -243,7 +254,11 @@ class Game:
             self.text("Click a call to see how fuzzy logic", (x0, y), color=C["muted"])
             self.text("calculates its priority.", (x0, y + 20), color=C["muted"])
             return
-        score, info = sim.triage.infer(call.severity, call.age, call.wait(sim.t), explain=True)
+        ekey = (call.id, round(call.wait(sim.t) * 2) / 2)
+        if getattr(self, "_explain_key", None) != ekey:
+            self._explain = sim.triage.infer(call.severity, call.age, ekey[1], explain=True)
+            self._explain_key = ekey
+        score, info = self._explain
         self.text(f"{call.name}", (x0, y), self.f_mid, C[call.kind])
         self.text(f"Priority {score:.0f}/100", (x0 + 220, y + 2), self.f_small, C["minor"])
         y += 26
@@ -313,7 +328,6 @@ class Game:
                 remaining -= step
         self.screen.fill(C["bg"])
         self.draw_map()
-        self.draw_search()
         self.draw_paths()
         self.draw_calls()
         self.draw_ambulances()

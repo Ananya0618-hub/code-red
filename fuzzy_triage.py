@@ -45,7 +45,7 @@ class FuzzyTriage:
             "severity": linspace(0, 10, 201),
             "age": linspace(0, 100, 201),
             "wait": linspace(0, 30, 201),
-            "priority": linspace(0, 100, 501),
+            "priority": linspace(0, 100, 201),
         }
         # Membership functions: name -> (shape, parameters)
         self.mfs = {

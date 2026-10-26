@@ -160,7 +160,7 @@ class Simulation:
             c.status in ("waiting", "assigned") for c in self.calls)
 
     def priority(self, call):
-        key = (call.severity, call.age, call.wait(self.t))
+        key = (call.severity, call.age, round(call.wait(self.t) * 2) / 2)  # update every half minute
         if key not in self._prio_cache:
             if len(self._prio_cache) > 5000:
                 self._prio_cache.clear()
