@@ -147,6 +147,7 @@ class Simulation:
         self.calls, self.next_id = [], 1
         self.score, self.events = 0, []
         self.last_search = None          # info about the most recent A* route
+        self._prio_cache = {}
 
     # ---------- helpers ----------
     @property
@@ -159,7 +160,12 @@ class Simulation:
             c.status in ("waiting", "assigned") for c in self.calls)
 
     def priority(self, call):
-        return self.triage.priority(call.severity, call.age, call.wait(self.t))
+        key = (call.severity, call.age, call.wait(self.t))
+        if key not in self._prio_cache:
+            if len(self._prio_cache) > 5000:
+                self._prio_cache.clear()
+            self._prio_cache[key] = self.triage.priority(*key)
+        return self._prio_cache[key]
 
     def log(self, text):
         self.events.append((self.t, text))

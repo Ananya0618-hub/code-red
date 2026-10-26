@@ -50,12 +50,14 @@ class Game:
         self.seed, self.mode = 1, "fuzzy"
         self.speed, self.paused, self.show_search = 1, False, True
         self.selected, self.list_rects, self.message = None, [], ""
+        self._text_cache = {}
         self.restart()
 
     def restart(self, mode=None):
         if mode:
             self.mode = mode
         self.sim = Simulation(mode=self.mode, seed=self.seed)
+        self._map_cache, self._search_key = None, None
         self.selected, self.message = None, ""
 
     # ---------- input ----------
@@ -96,7 +98,13 @@ class Game:
 
     # ---------- drawing helpers ----------
     def text(self, s, pos, font=None, color=None):
-        img = (font or self.f_small).render(s, True, color or C["text"])
+        key = (s, id(font or self.f_small), color or C["text"])
+        img = self._text_cache.get(key)
+        if img is None:
+            if len(self._text_cache) > 2000:
+                self._text_cache.clear()
+            img = (font or self.f_small).render(s, True, color or C["text"])
+            self._text_cache[key] = img
         self.screen.blit(img, pos)
         return img.get_width()
 
@@ -104,6 +112,14 @@ class Game:
         return pygame.Rect(c * TILE, r * TILE, TILE, TILE)
 
     def draw_map(self):
+        if getattr(self, "_map_cache", None) is None:
+            real = self.screen
+            self.screen = pygame.Surface((MAP_W, MAP_H))
+            self._draw_map_tiles()
+            self._map_cache, self.screen = self.screen, real
+        self.screen.blit(self._map_cache, (0, 0))
+
+    def _draw_map_tiles(self):
         city = self.sim.city
         for r in range(city.rows):
             for c in range(city.cols):
@@ -137,10 +153,12 @@ class Game:
         info = self.sim.last_search
         if not (self.show_search and info and info["path"]):
             return
-        overlay = pygame.Surface((MAP_W, MAP_H), pygame.SRCALPHA)
-        for (r, c) in info["explored"]:
-            overlay.fill(C["explored"], self.tile_rect(r, c).inflate(-4, -4))
-        self.screen.blit(overlay, (0, 0))
+        if getattr(self, "_search_key", None) is not info:
+            overlay = pygame.Surface((MAP_W, MAP_H), pygame.SRCALPHA)
+            for (r, c) in info["explored"]:
+                overlay.fill(C["explored"], self.tile_rect(r, c).inflate(-4, -4))
+            self._search_overlay, self._search_key = overlay, info
+        self.screen.blit(self._search_overlay, (0, 0))
 
     def draw_paths(self):
         for amb in self.sim.ambulances:
@@ -312,7 +330,7 @@ class Game:
                 running = self.handle(event)
                 if not running:
                     break
-            self.frame(self.clock.tick(60) / 1000)
+            self.frame(self.clock.tick(30) / 1000)
         pygame.quit()
 
 
