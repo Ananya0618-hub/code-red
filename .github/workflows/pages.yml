@@ -1,0 +1,29 @@
+# Builds the browser version with pygbag and publishes it to GitHub Pages
+# every time code is pushed to the main branch.
+name: Deploy web version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build with pygbag
+        run: |
+          pip install pygbag==0.9.3
+          python -m pygbag --build $GITHUB_WORKSPACE
+      - name: Publish to the gh-pages branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: build/web

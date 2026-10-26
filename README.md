@@ -7,13 +7,19 @@ A game for the AISC project. Emergency calls appear around a city and two ambula
 
 You can let the AI play, or play yourself and try to beat it.
 
-## Run
+## Play online
+
+**https://ananya0618-hub.github.io/code-red/** (opens in the browser, no install; click the page once to start)
+
+## Run on your computer
 
 ```bash
 pip install -r requirements.txt
 python game.py        # play the game
 python compare.py     # FIFO vs fuzzy over 20 shifts, no graphics
 ```
+
+The web version is the same Python code, built automatically with [pygbag](https://pypi.org/project/pygbag/) by the GitHub Action in `.github/workflows/pages.yml` every time code is pushed.
 
 ## Controls
 
@@ -46,17 +52,18 @@ python compare.py     # FIFO vs fuzzy over 20 shifts, no graphics
 | Method | Critical saved | Serious saved | Minor saved | Avg score |
 |---|---|---|---|---|
 | FIFO (first come, first served) | 66% | 98% | 100% | 694 |
-| **Fuzzy priority** | **100%** | 96% | 84% | **893** |
+| **Fuzzy priority** | **100%** | 96% | 85% | **896** |
 
 With FIFO, a heart attack can wait behind a sprained ankle and run out of time. Fuzzy logic sends ambulances to the most urgent patients first, so every critical patient was saved. The trade-off is that a few minor patients wait too long.
 
 ## Files
 
 ```
+main.py          Entry point (used by the browser version)
 game.py          Pygame window: drawing, mouse and keyboard
 sim.py           Game logic: city map, calls, ambulances, dispatching (no graphics)
 astar.py         A* search and Dijkstra
-fuzzy_triage.py  Fuzzy logic system (Mamdani), written from scratch
+fuzzy_triage.py  Fuzzy logic system (Mamdani), written from scratch in plain Python
 compare.py       Runs FIFO vs fuzzy many times and prints the results
 ```
 
@@ -121,5 +128,5 @@ The priority is recalculated every time an ambulance becomes free, because waiti
 6. **What if the heuristic overestimated?** A* could return a route that is not the cheapest.
 7. **A* vs Dijkstra?** Dijkstra is A* with h = 0 and searches in all directions. A* is pulled towards the goal and checked about half as many tiles in our tests for the same cost.
 8. **Why do traffic tiles cost 3?** A traffic jam takes three times as long to cross, so A* will often go around it. This shows A* minimises time, not number of tiles.
-9. **What is the trade-off of fuzzy dispatch?** Minor patients wait longer. FIFO saved all minor patients but only 66% of critical ones; fuzzy saved 100% of critical patients and 84% of minor ones.
+9. **What is the trade-off of fuzzy dispatch?** Minor patients wait longer. FIFO saved all minor patients but only 66% of critical ones; fuzzy saved 100% of critical patients and 85% of minor ones.
 10. **How could it be improved?** Real city maps, more ambulances, time-of-day traffic, or letting a genetic algorithm tune the fuzzy membership functions automatically.

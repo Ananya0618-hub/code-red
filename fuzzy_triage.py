@@ -1,50 +1,53 @@
 """
-Fuzzy triage: Mamdani fuzzy inference system written from scratch (no library),
-so every step can be explained in the viva.
+Fuzzy triage: Mamdani fuzzy inference system written from scratch in plain
+Python (no libraries), so it also runs in the browser version of the game.
 
 Inputs
-  severity  0-10   (symptom severity score from the call: chest pain, breathing,
-                    bleeding, consciousness ...)
-  age       0-100  years
-  wait      0-30   minutes the call has already been waiting in the queue
+  severity  0-10   how serious the emergency is
+  age       0-100  patient age in years
+  wait      0-30   minutes the call has already been waiting
 Output
   priority  0-100
 
-Pipeline: fuzzification -> rule evaluation (AND=min, OR=max)
-          -> implication (min / clipping) -> aggregation (max)
-          -> defuzzification (centroid)
+Steps: fuzzification -> rule evaluation (AND = min, OR = max)
+       -> implication (clip) -> aggregation (max) -> defuzzification (centroid)
 """
-import numpy as np
 
 
 def trimf(x, a, b, c):
-    x = np.asarray(x, dtype=float)
-    left = np.where(b > a, (x - a) / (b - a + 1e-12), (x >= b).astype(float))
-    right = np.where(c > b, (c - x) / (c - b + 1e-12), (x <= b).astype(float))
-    return np.clip(np.minimum(left, right), 0, 1)
+    """Triangle: 0 at a, rises to 1 at b, falls to 0 at c."""
+    left = (x - a) / (b - a) if b > a else (1.0 if x >= b else 0.0)
+    right = (c - x) / (c - b) if c > b else (1.0 if x <= b else 0.0)
+    return max(0.0, min(left, right, 1.0))
 
 
 def trapmf(x, a, b, c, d):
-    x = np.asarray(x, dtype=float)
-    left = np.ones_like(x) if b == a else (x - a) / (b - a)
-    right = np.ones_like(x) if d == c else (d - x) / (d - c)
-    y = np.minimum(np.minimum(left, 1.0), right)
+    """Trapezoid: 0 at a, 1 from b to c, 0 at d."""
     if b == a:
-        y = np.where(x < a, 0.0, y)
+        left = 1.0 if x >= a else 0.0
+    else:
+        left = (x - a) / (b - a)
     if d == c:
-        y = np.where(x > d, 0.0, y)
-    return np.clip(y, 0, 1)
+        right = 1.0 if x <= d else 0.0
+    else:
+        right = (d - x) / (d - c)
+    return max(0.0, min(left, 1.0, right))
+
+
+def linspace(lo, hi, n):
+    step = (hi - lo) / (n - 1)
+    return [lo + i * step for i in range(n)]
 
 
 class FuzzyTriage:
     def __init__(self):
         self.universe = {
-            "severity": np.linspace(0, 10, 201),
-            "age": np.linspace(0, 100, 201),
-            "wait": np.linspace(0, 30, 201),
-            "priority": np.linspace(0, 100, 501),
+            "severity": linspace(0, 10, 201),
+            "age": linspace(0, 100, 201),
+            "wait": linspace(0, 30, 201),
+            "priority": linspace(0, 100, 501),
         }
-        # Membership functions: name -> (type, params)
+        # Membership functions: name -> (shape, parameters)
         self.mfs = {
             "severity": {
                 "low": ("trap", (0, 0, 2, 4)),
@@ -68,7 +71,7 @@ class FuzzyTriage:
                 "critical": ("trap", (80, 92, 100, 100)),
             },
         }
-        # Rule base: (description, function(memberships) -> firing strength, output term)
+        # Rule base: (description, firing strength function, output set)
         self.rules = [
             ("IF severity is high THEN critical",
              lambda m: m["severity"]["high"], "critical"),
@@ -88,50 +91,45 @@ class FuzzyTriage:
             ("IF severity is low AND wait is long THEN medium",
              lambda m: min(m["severity"]["low"], m["wait"]["long"]), "medium"),
         ]
+        # Pre-compute the output membership curves once
+        y = self.universe["priority"]
+        self._out_curves = {t: [self.mf("priority", t, v) for v in y]
+                            for t in self.mfs["priority"]}
 
     def mf(self, var, term, x):
         kind, p = self.mfs[var][term]
         return trimf(x, *p) if kind == "tri" else trapmf(x, *p)
 
+    def curve(self, var, term):
+        """Membership values over the whole range (used for drawing graphs)."""
+        return [self.mf(var, term, v) for v in self.universe[var]]
+
     def fuzzify(self, severity, age, wait):
-        crisp = {"severity": np.clip(severity, 0, 10),
-                 "age": np.clip(age, 0, 100),
-                 "wait": np.clip(wait, 0, 30)}
-        return {var: {t: float(self.mf(var, t, crisp[var])) for t in self.mfs[var]}
+        crisp = {"severity": min(max(severity, 0), 10),
+                 "age": min(max(age, 0), 100),
+                 "wait": min(max(wait, 0), 30)}
+        return {var: {t: self.mf(var, t, crisp[var]) for t in self.mfs[var]}
                 for var in crisp}
 
     def infer(self, severity, age, wait, explain=False):
         m = self.fuzzify(severity, age, wait)
         y = self.universe["priority"]
-        aggregated = np.zeros_like(y)
+        aggregated = [0.0] * len(y)
         fired = []
         for desc, fn, out in self.rules:
             strength = fn(m)
             if strength > 0:
                 fired.append((desc, round(strength, 3)))
-                clipped = np.minimum(strength, self.mf("priority", out, y))  # implication
-                aggregated = np.maximum(aggregated, clipped)                 # aggregation
-        if aggregated.sum() == 0:
-            score = 0.0
-        else:
-            score = float((y * aggregated).sum() / aggregated.sum())        # centroid
+                curve = self._out_curves[out]
+                for i in range(len(y)):
+                    clipped = min(strength, curve[i])          # implication
+                    if clipped > aggregated[i]:                # aggregation
+                        aggregated[i] = clipped
+        total = sum(aggregated)
+        score = sum(v * a for v, a in zip(y, aggregated)) / total if total else 0.0  # centroid
         if explain:
-            return score, {"memberships": m, "fired_rules": fired,
-                           "aggregated": aggregated}
+            return score, {"memberships": m, "fired_rules": fired, "aggregated": aggregated}
         return score
 
     def priority(self, severity, age, wait):
         return self.infer(severity, age, wait)
-
-
-if __name__ == "__main__":
-    ft = FuzzyTriage()
-    cases = [("Cardiac arrest, 70y", 9.5, 70, 0),
-             ("Fracture, 8y child", 5, 8, 2),
-             ("Fracture, 30y adult", 5, 30, 2),
-             ("Minor cut, 30y, waited 20 min", 2, 30, 20),
-             ("Minor cut, 30y, just called", 2, 30, 0),
-             ("Fever, 80y", 3, 80, 5)]
-    for name, s, a, w in cases:
-        score, info = ft.infer(s, a, w, explain=True)
-        print(f"{name:32s} -> priority {score:5.1f}   rules: {[r[0].split('THEN')[1].strip() for r in info['fired_rules']]}")

@@ -13,8 +13,8 @@ Keys
   P           pause      +/-  game speed      R  restart      ESC  quit
 Click a call (on the map or in the list) to see its fuzzy logic breakdown.
 """
+import asyncio
 import math
-import sys
 import pygame
 
 from sim import (Simulation, BUILDING, ROAD, TRAFFIC, BLOCKED, HOSPITAL, BASE,
@@ -323,7 +323,8 @@ class Game:
             self.draw_game_over()
         pygame.display.flip()
 
-    def run(self):
+    async def run(self):
+        # async so the same loop also works in the browser version (pygbag)
         running = True
         while running:
             for event in pygame.event.get():
@@ -331,9 +332,9 @@ class Game:
                 if not running:
                     break
             self.frame(self.clock.tick(30) / 1000)
+            await asyncio.sleep(0)
         pygame.quit()
 
 
 if __name__ == "__main__":
-    Game().run()
-    sys.exit()
+    asyncio.run(Game().run())

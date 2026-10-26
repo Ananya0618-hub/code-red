@@ -186,7 +186,8 @@ class Simulation:
             return None
         if self.mode == "fifo":
             return min(waiting, key=lambda c: c.t_call)
-        return max(waiting, key=self.priority)          # fuzzy
+        # highest priority first; if two are equal, the one who called first
+        return max(waiting, key=lambda c: (round(self.priority(c), 6), -c.t_call))
 
     def dispatch(self, call):
         """Send the nearest free ambulance to this call. Returns True if sent."""
