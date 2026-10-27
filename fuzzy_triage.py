@@ -6,6 +6,7 @@ Inputs
   severity  0-10   how serious the emergency is
   age       0-100  patient age in years
   wait      0-30   minutes the call has already been waiting
+  distance  0-12   minutes for the nearest ambulance to drive there (from A*)
 Output
   priority  0-100
 
@@ -45,6 +46,7 @@ class FuzzyTriage:
             "severity": linspace(0, 10, 201),
             "age": linspace(0, 100, 201),
             "wait": linspace(0, 30, 201),
+            "distance": linspace(0, 12, 201),
             "priority": linspace(0, 100, 201),
         }
         # Membership functions: name -> (shape, parameters)
@@ -63,6 +65,11 @@ class FuzzyTriage:
                 "short": ("trap", (0, 0, 3, 7)),
                 "medium": ("tri", (5, 10, 15)),
                 "long": ("trap", (12, 18, 30, 30)),
+            },
+            "distance": {
+                "near": ("trap", (0, 0, 2, 4)),
+                "medium": ("tri", (3, 5.5, 8)),
+                "far": ("trap", (7, 9, 12, 12)),
             },
             "priority": {
                 "low": ("trap", (0, 0, 15, 35)),
@@ -90,6 +97,15 @@ class FuzzyTriage:
                            max(m["age"]["child"], m["age"]["elderly"])), "medium"),
             ("IF severity is low AND wait is long THEN medium",
              lambda m: min(m["severity"]["low"], m["wait"]["long"]), "medium"),
+            # distance rules: a nearby patient can be reached quickly, a far one costs a lot of ambulance time
+            ("IF severity is medium AND distance is near THEN high",
+             lambda m: min(m["severity"]["medium"], m["distance"]["near"]), "high"),
+            ("IF severity is low AND distance is near AND wait is (short OR medium) THEN medium",
+             lambda m: min(m["severity"]["low"], m["distance"]["near"],
+                           max(m["wait"]["short"], m["wait"]["medium"])), "medium"),
+            ("IF severity is low AND distance is far AND wait is (short OR medium) THEN low",
+             lambda m: min(m["severity"]["low"], m["distance"]["far"],
+                           max(m["wait"]["short"], m["wait"]["medium"])), "low"),
         ]
         # Pre-compute the output membership curves once
         y = self.universe["priority"]
@@ -104,15 +120,16 @@ class FuzzyTriage:
         """Membership values over the whole range (used for drawing graphs)."""
         return [self.mf(var, term, v) for v in self.universe[var]]
 
-    def fuzzify(self, severity, age, wait):
+    def fuzzify(self, severity, age, wait, distance):
         crisp = {"severity": min(max(severity, 0), 10),
                  "age": min(max(age, 0), 100),
-                 "wait": min(max(wait, 0), 30)}
+                 "wait": min(max(wait, 0), 30),
+                 "distance": min(max(distance, 0), 12)}
         return {var: {t: self.mf(var, t, crisp[var]) for t in self.mfs[var]}
                 for var in crisp}
 
-    def infer(self, severity, age, wait, explain=False):
-        m = self.fuzzify(severity, age, wait)
+    def infer(self, severity, age, wait, distance, explain=False):
+        m = self.fuzzify(severity, age, wait, distance)
         y = self.universe["priority"]
         aggregated = [0.0] * len(y)
         fired = []
@@ -131,5 +148,5 @@ class FuzzyTriage:
             return score, {"memberships": m, "fired_rules": fired, "aggregated": aggregated}
         return score
 
-    def priority(self, severity, age, wait):
-        return self.infer(severity, age, wait)
+    def priority(self, severity, age, wait, distance):
+        return self.infer(severity, age, wait, distance)

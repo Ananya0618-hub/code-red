@@ -6,7 +6,7 @@ Time is in game minutes. In the game, 1 real second = 1 game minute.
 import random
 from collections import deque
 
-from astar import astar, dijkstra
+from astar import astar, dijkstra, travel_costs_from
 from fuzzy_triage import FuzzyTriage
 
 BUILDING, ROAD, TRAFFIC, BLOCKED, HOSPITAL, BASE = range(6)
@@ -148,6 +148,7 @@ class Simulation:
         self.score, self.events = 0, []
         self.last_search = None          # info about the most recent A* route
         self._prio_cache = {}
+        self._dist_cache = {}
 
     # ---------- helpers ----------
     @property
@@ -159,8 +160,20 @@ class Simulation:
         return self.t >= self.shift_length and not any(
             c.status in ("waiting", "assigned") for c in self.calls)
 
+    def distance(self, call):
+        """Minutes for the nearest ambulance to reach this call
+        (free ambulances if any, otherwise any ambulance)."""
+        ambs = [a for a in self.ambulances if a.available] or self.ambulances
+        best = float("inf")
+        for a in ambs:
+            if a.node not in self._dist_cache:
+                self._dist_cache[a.node] = travel_costs_from(self.city, a.node)
+            best = min(best, self._dist_cache[a.node].get(call.node, float("inf")))
+        return best / SPEED
+
     def priority(self, call):
-        key = (call.severity, call.age, round(call.wait(self.t) * 2) / 2)  # update every half minute
+        key = (call.severity, call.age, round(call.wait(self.t) * 2) / 2,  # update every half minute
+               round(self.distance(call) * 2) / 2)
         if key not in self._prio_cache:
             if len(self._prio_cache) > 5000:
                 self._prio_cache.clear()

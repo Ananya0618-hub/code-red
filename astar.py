@@ -58,3 +58,20 @@ def astar(city, start, goal, heuristic=manhattan):
 
 def dijkstra(city, start, goal):
     return astar(city, start, goal, heuristic=zero)
+
+
+def travel_costs_from(city, start):
+    """Dijkstra from one tile to every tile: {tile: cheapest cost}.
+    Used to know how far each emergency is from an ambulance."""
+    dist = {start: 0}
+    heap = [(0, start)]
+    while heap:
+        d, node = heapq.heappop(heap)
+        if d > dist.get(node, float("inf")):
+            continue
+        for nxt in city.neighbors(node):
+            nd = d + city.cost(nxt)
+            if nd < dist.get(nxt, float("inf")):
+                dist[nxt] = nd
+                heapq.heappush(heap, (nd, nxt))
+    return dist

@@ -254,18 +254,19 @@ class Game:
             self.text("Click a call to see how fuzzy logic", (x0, y), color=C["muted"])
             self.text("calculates its priority.", (x0, y + 20), color=C["muted"])
             return
-        ekey = (call.id, round(call.wait(sim.t) * 2) / 2)
+        dist = round(sim.distance(call) * 2) / 2
+        ekey = (call.id, round(call.wait(sim.t) * 2) / 2, dist)
         if getattr(self, "_explain_key", None) != ekey:
-            self._explain = sim.triage.infer(call.severity, call.age, ekey[1], explain=True)
+            self._explain = sim.triage.infer(call.severity, call.age, ekey[1], dist, explain=True)
             self._explain_key = ekey
         score, info = self._explain
         self.text(f"{call.name}", (x0, y), self.f_mid, C[call.kind])
         self.text(f"Priority {score:.0f}/100", (x0 + 220, y + 2), self.f_small, C["minor"])
         y += 26
-        self.text(f"Severity {call.severity}   Age {call.age}   Waited {call.wait(sim.t):.0f} min",
+        self.text(f"Severity {call.severity}  Age {call.age}  Waited {call.wait(sim.t):.0f}m  Distance {dist:.1f}m",
                   (x0, y), color=C["muted"])
         y += 24
-        names = {"severity": "Severity", "age": "Age", "wait": "Wait"}
+        names = {"severity": "Severity", "age": "Age", "wait": "Wait", "distance": "Distance"}
         for var, terms in info["memberships"].items():
             parts = ", ".join(f"{t} {v:.2f}" for t, v in terms.items() if v > 0)
             self.text(f"{names[var]}: {parts}", (x0, y))
@@ -276,7 +277,7 @@ class Game:
         for desc, strength in info["fired_rules"][:4]:
             short = (desc.replace("IF ", "").replace(" THEN ", " -> ").replace("severity", "sev")
                      .replace("is ", "").replace(" AND ", " & ").replace(" OR ", "/")
-                     .replace("(short/medium)", "not long"))
+                     .replace("wait (short/medium)", "short wait").replace("distance", "dist"))
             self.text(f"{short}  ({strength:.2f})", (x0, y))
             y += 20
         if self.mode == "manual" and call.status == "waiting":

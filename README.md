@@ -2,7 +2,7 @@
 
 A game for the AISC project. Emergency calls appear around a city and two ambulances have to reach them before time runs out.
 
-- **Fuzzy logic** decides *who goes first*, from how serious the case is, the patient's age and how long they have waited.
+- **Fuzzy logic** decides *who goes first*, from how serious the case is, the patient's age, how long they have waited and how far away they are.
 - **A\* search** decides *which road to take*, around traffic jams and blocked roads.
 
 You can let the AI play, or play yourself and try to beat it.
@@ -52,7 +52,7 @@ The web version is the same Python code, built automatically with [pygbag](https
 | Method | Critical saved | Serious saved | Minor saved | Avg score |
 |---|---|---|---|---|
 | FIFO (first come, first served) | 66% | 98% | 100% | 694 |
-| **Fuzzy priority** | **100%** | 96% | 85% | **896** |
+| **Fuzzy priority** | **100%** | 97% | 85% | **902** |
 
 With FIFO, a heart attack can wait behind a sprained ankle and run out of time. Fuzzy logic sends ambulances to the most urgent patients first, so every critical patient was saved. The trade-off is that a few minor patients wait too long.
 
@@ -96,6 +96,7 @@ A* is used three times in every trip: base to patient, patient to nearest hospit
 | Severity (input) | 0–10 | low, medium, high |
 | Age (input) | 0–100 | child, adult, elderly |
 | Waiting time (input) | 0–30 min | short, medium, long |
+| Distance (input) | 0–12 min | near, medium, far (driving time for the nearest ambulance, from Dijkstra on the road grid) |
 | Priority (output) | 0–100 | low, medium, high, critical |
 
 Rules:
@@ -107,16 +108,21 @@ Rules:
 5. IF severity is low AND age is adult AND wait is not long THEN low
 6. IF severity is low AND age is child OR elderly THEN medium
 7. IF severity is low AND wait is long THEN medium
+8. IF severity is medium AND distance is near THEN high
+9. IF severity is low AND distance is near AND wait is not long THEN medium
+10. IF severity is low AND distance is far AND wait is not long THEN low
+
+Rules 8–10 use distance: a nearby patient can be reached quickly, so moderate and minor cases close to an ambulance move up, and far-away minor cases move down. Severe cases are always critical, however far away they are.
 
 Steps (Mamdani inference):
 
-1. **Fuzzify** each input into membership degrees, e.g. age 74 means elderly 1.0.
+1. **Fuzzify** each input into membership degrees, e.g. age 74 means elderly 1.0, and 2 minutes away means near 1.0.
 2. **Evaluate the rules:** AND = min, OR = max.
 3. **Clip** each rule's output set at its strength.
 4. **Combine** the clipped sets with max.
 5. **Defuzzify** with the centroid, which gives one priority number.
 
-The priority is recalculated every time an ambulance becomes free, because waiting time keeps changing. That is how a minor case slowly rises up the list and is not forgotten.
+The priority is recalculated every half game-minute, because waiting time and distance keep changing as ambulances move. That is how a minor case slowly rises up the list and is not forgotten.
 
 ## Viva questions
 
@@ -128,5 +134,6 @@ The priority is recalculated every time an ambulance becomes free, because waiti
 6. **What if the heuristic overestimated?** A* could return a route that is not the cheapest.
 7. **A* vs Dijkstra?** Dijkstra is A* with h = 0 and searches in all directions. A* is pulled towards the goal and checked about half as many tiles in our tests for the same cost.
 8. **Why do traffic tiles cost 3?** A traffic jam takes three times as long to cross, so A* will often go around it. This shows A* minimises time, not number of tiles.
-9. **What is the trade-off of fuzzy dispatch?** Minor patients wait longer. FIFO saved all minor patients but only 66% of critical ones; fuzzy saved 100% of critical patients and 85% of minor ones.
-10. **How could it be improved?** Real city maps, more ambulances, time-of-day traffic, or letting a genetic algorithm tune the fuzzy membership functions automatically.
+9. **Why add distance?** Serving a nearby patient uses less ambulance time, so the ambulance is free sooner for the next emergency. But a severe case stays critical even when it is far, so distance never pushes a heart attack down the list.
+10. **What is the trade-off of fuzzy dispatch?** Minor patients wait longer. FIFO saved all minor patients but only 66% of critical ones; fuzzy saved 100% of critical patients and 85% of minor ones.
+11. **How could it be improved?** Real city maps, more ambulances, time-of-day traffic, or letting a genetic algorithm tune the fuzzy membership functions automatically.
