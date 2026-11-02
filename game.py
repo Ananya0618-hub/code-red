@@ -19,6 +19,7 @@ import pygame
 
 from sim import (Simulation, BUILDING, ROAD, TRAFFIC, BLOCKED, HOSPITAL, BASE,
                  CALL_TYPES)
+from triage_checklist import labels
 
 TILE = 40
 MAP_W, MAP_H = 20 * TILE, 15 * TILE
@@ -263,7 +264,19 @@ class Game:
         self.text(f"{call.name}", (x0, y), self.f_mid, C[call.kind])
         self.text(f"Priority {score:.0f}/100", (x0 + 220, y + 2), self.f_small, C["minor"])
         y += 26
-        self.text(f"Severity {call.severity}  Age {call.age}  Waited {call.wait(sim.t):.0f}m  Distance {dist:.1f}m",
+        # symptom checklist -> severity (wrapped onto up to two lines)
+        line, lines = "Symptoms: ", []
+        for i, lab in enumerate(labels(call.symptoms)):
+            part = lab + (", " if i < len(call.symptoms) - 1 else "")
+            if self.f_small.size(line + part)[0] > 340:
+                lines.append(line)
+                line = "  "
+            line += part
+        lines.append(line)
+        for ln in lines[:2]:
+            self.text(ln, (x0, y), color=C["text"])
+            y += 20
+        self.text(f"= Severity {call.severity:.1f}  Age {call.age}  Waited {call.wait(sim.t):.0f}m  Dist {dist:.1f}m",
                   (x0, y), color=C["muted"])
         y += 24
         names = {"severity": "Severity", "age": "Age", "wait": "Wait", "distance": "Distance"}

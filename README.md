@@ -51,8 +51,8 @@ The web version is the same Python code, built automatically with [pygbag](https
 
 | Method | Critical saved | Serious saved | Minor saved | Avg score |
 |---|---|---|---|---|
-| FIFO (first come, first served) | 66% | 98% | 100% | 694 |
-| **Fuzzy priority** | **100%** | 97% | 85% | **902** |
+| FIFO (first come, first served) | 58% | 96% | 100% | 586 |
+| **Fuzzy priority** | **100%** | 95% | 84% | **871** |
 
 With FIFO, a heart attack can wait behind a sprained ankle and run out of time. Fuzzy logic sends ambulances to the most urgent patients first, so every critical patient was saved. The trade-off is that a few minor patients wait too long.
 
@@ -63,6 +63,7 @@ main.py          Entry point (used by the browser version)
 game.py          Pygame window: drawing, mouse and keyboard
 sim.py           Game logic: city map, calls, ambulances, dispatching (no graphics)
 astar.py         A* search and Dijkstra
+triage_checklist.py  Symptom checklist: how severity is calculated
 fuzzy_triage.py  Fuzzy logic system (Mamdani), written from scratch in plain Python
 compare.py       Runs FIFO vs fuzzy many times and prints the results
 ```
@@ -89,11 +90,31 @@ A* always expands the tile with the smallest f(n). It uses a priority queue (min
 
 A* is used three times in every trip: base to patient, patient to nearest hospital, hospital back to base. It is also used to choose the nearest free ambulance, by comparing route costs rather than straight-line distance.
 
+### How severity is decided (triage_checklist.py)
+
+Severity is **not** the caller's opinion: every caller feels their case is critical. Like real ambulance dispatchers (for example India's 108 service), the operator asks fixed yes/no questions about symptoms, and each YES adds a fixed medical weight:
+
+| Question | Weight |
+|---|---|
+| Unconscious or not responding? | 7.5 |
+| Face drooping, arm weakness or slurred speech (stroke signs)? | 7.5 |
+| Chest pain or pressure? | 5 |
+| Heavy bleeding that won't stop? | 5 |
+| Difficulty breathing? | 4 |
+| Serious burn? | 4 |
+| Broken bone or can't move a limb? | 3.5 |
+| Fever of 39°C or more? | 2.5 |
+| Vomiting or dizzy? | 1 |
+| In pain? | 1 |
+| Small cut or bruise? | 0.5 |
+
+**severity = sum of the weights of the YES answers (maximum 10).** One red flag (unconscious, stroke signs) is enough to make a call critical; a sprained ankle (pain only) scores 1 however worried the caller is. Severity 7+ counts as critical, 4–7 serious, below 4 minor. Click an emergency in the game to see its symptoms and the severity they produce.
+
 ### Fuzzy logic (fuzzy_triage.py)
 
 | Variable | Range | Fuzzy sets |
 |---|---|---|
-| Severity (input) | 0–10 | low, medium, high |
+| Severity (input) | 0–10 | low, medium, high (calculated from the symptom checklist) |
 | Age (input) | 0–100 | child, adult, elderly |
 | Waiting time (input) | 0–30 min | short, medium, long |
 | Distance (input) | 0–12 min | near, medium, far (driving time for the nearest ambulance, from Dijkstra on the road grid) |
@@ -126,6 +147,7 @@ The priority is recalculated every half game-minute, because waiting time and di
 
 ## Viva questions
 
+0. **How do you decide criticality? Every patient feels critical.** We never ask the patient how serious it is. The dispatcher asks a fixed symptom checklist (unconscious? breathing? chest pain? bleeding? ...), and each symptom has a fixed weight, so the same symptoms always give the same severity. Distance, waiting time and age are measured or recorded, not asked.
 1. **What does your project do?** It is an ambulance dispatch game. Fuzzy logic decides which emergency to serve first, and A* finds the fastest route through the city.
 2. **Why fuzzy logic?** Triage is vague: "fairly serious", "elderly", "waited a while". Fixed cut-offs like "age > 60" treat 59 and 61 completely differently. Fuzzy sets change smoothly and every decision can be explained by the rules that fired.
 3. **What is defuzzification?** Turning the combined fuzzy output into one number. We use the centroid (centre of gravity).
@@ -135,5 +157,5 @@ The priority is recalculated every half game-minute, because waiting time and di
 7. **A* vs Dijkstra?** Dijkstra is A* with h = 0 and searches in all directions. A* is pulled towards the goal and checked about half as many tiles in our tests for the same cost.
 8. **Why do traffic tiles cost 3?** A traffic jam takes three times as long to cross, so A* will often go around it. This shows A* minimises time, not number of tiles.
 9. **Why add distance?** Serving a nearby patient uses less ambulance time, so the ambulance is free sooner for the next emergency. But a severe case stays critical even when it is far, so distance never pushes a heart attack down the list.
-10. **What is the trade-off of fuzzy dispatch?** Minor patients wait longer. FIFO saved all minor patients but only 66% of critical ones; fuzzy saved 100% of critical patients and 85% of minor ones.
+10. **What is the trade-off of fuzzy dispatch?** Minor patients wait longer. FIFO saved all minor patients but only 58% of critical ones; fuzzy saved 100% of critical patients and 84% of minor ones.
 11. **How could it be improved?** Real city maps, more ambulances, time-of-day traffic, or letting a genetic algorithm tune the fuzzy membership functions automatically.

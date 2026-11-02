@@ -8,6 +8,7 @@ from collections import deque
 
 from astar import astar, dijkstra, travel_costs_from
 from fuzzy_triage import FuzzyTriage
+from triage_checklist import ask, severity_from, category, labels
 
 BUILDING, ROAD, TRAFFIC, BLOCKED, HOSPITAL, BASE = range(6)
 COST = {ROAD: 1, TRAFFIC: 3, HOSPITAL: 1, BASE: 1}
@@ -16,11 +17,12 @@ SCENE_TIME = 1.5       # minutes treating the patient
 DROPOFF_TIME = 1.0     # minutes handing over at the hospital
 
 CALL_TYPES = {
-    "critical": {"severity": (7.5, 10), "deadline": 30, "points": 30, "penalty": 30,
+    # severity is NOT stored here: it is calculated from the symptom checklist (triage_checklist.py)
+    "critical": {"deadline": 30, "points": 30, "penalty": 30,
                  "names": ["Heart attack", "Stroke", "Road accident", "Not breathing"]},
-    "serious": {"severity": (4.5, 7), "deadline": 50, "points": 20, "penalty": 15,
+    "serious": {"deadline": 50, "points": 20, "penalty": 15,
                 "names": ["Fracture", "Asthma attack", "Bad burn", "High fever"]},
-    "minor": {"severity": (0.5, 3.5), "deadline": 80, "points": 10, "penalty": 5,
+    "minor": {"deadline": 80, "points": 10, "penalty": 5,
               "names": ["Sprained ankle", "Small cut", "Mild fever", "Dizziness"]},
 }
 CALL_MIX = [("critical", 0.25), ("serious", 0.35), ("minor", 0.40)]
@@ -90,10 +92,13 @@ class CityMap:
 
 class Call:
     def __init__(self, cid, node, kind, rng, t):
-        info = CALL_TYPES[kind]
-        self.id, self.node, self.kind = cid, node, kind
-        self.name = rng.choice(info["names"])
-        self.severity = round(rng.uniform(*info["severity"]), 1)
+        self.id, self.node = cid, node
+        self.name = rng.choice(CALL_TYPES[kind]["names"])
+        # the dispatcher asks the checklist questions; severity comes from the answers
+        self.symptoms = ask(self.name, rng)
+        self.severity = severity_from(self.symptoms)
+        self.kind = category(self.severity)
+        info = CALL_TYPES[self.kind]
         if self.name == "High fever":
             self.age = rng.choice([rng.randint(1, 10), rng.randint(65, 90)])
         else:
